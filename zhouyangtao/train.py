@@ -9,6 +9,7 @@ import tensorflow as tf
 from tensorflow.keras import layers,Sequential,optimizers,metrics
 import csv
 
+
 def load_characteristic_vector(file_name):
     with open(file_name,"r",encoding = "utf-8") as file:
         reader = csv.reader(file)
