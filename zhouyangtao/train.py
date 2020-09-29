@@ -9,99 +9,6 @@ import tensorflow as tf
 from tensorflow.keras import layers,Sequential,optimizers,metrics
 import csv
 
-
-def load_characteristic_vector(file_name):
-    with open(file_name,"r",encoding = "utf-8") as file:
-        reader = csv.reader(file)
-        data = [row for row in reader]
-        vector = np.array(data)
-        vector = np.delete(vector, 0, axis=0)
-        vector = np.delete(vector, 0, axis=1)
-        vector = vector.astype(np.float)
-    return vector
-
-def group_and_merge(list):
-    t = pd.DataFrame(list)
-    data = t[2].groupby([t[0],t[1]]).max()
-    result = pd.DataFrame(data).reset_index().values.tolist()
-    return result
-
-
-def load_label(file_name):
-    with open(file_name, "r", encoding = "utf-8") as file:
-        reader = csv.reader(file)
-        data = [row[12] for row in reader]
-        vector = np.array(data)
-        vector = np.delete(vector, 0, axis = 0)
-        vector = vector.astype(np.int)
-        return vector
-
-
-# 加载数据，将训练数据集3（340万条数据）作为训练集，训练数据4（37万条数据）作为测试集
-print("开始加载数据")
-train_data = load_characteristic_vector('./zhangyan/Processed_train_4.csv')
-train_label = load_label('./zhangyan/user_video_act_train_4.csv')
-test_data = load_characteristic_vector('./zhangyan/Processed_train_3.csv')
-test_label = load_label('./zhangyan/user_video_act_train_3.csv')
-pre_data = load_characteristic_vector('./zhangyan/Processed_pre.csv')
-x_train = tf.convert_to_tensor(train_data, dtype=tf.float32)
-y_train = tf.convert_to_tensor(train_label, dtype=tf.int32)
-x_test = tf.convert_to_tensor(test_data, dtype=tf.float32)
-y_test = tf.convert_to_tensor(test_label, dtype=tf.int32)
-result_pre = tf.convert_to_tensor(pre_data, dtype=tf.float32)
-print("数据加载成功！")
-
-
-# 创建模型，目前设的是三层
-def create_model():
-    return Sequential([
-        #layers.Dense(256, activation='relu'),
-        #layers.Dense(128, activation='relu'),
-        layers.Dense(64, activation='relu'),
-        layers.Dense(32, activation='relu'),
-        #layers.Dense(16, activation='relu'),
-        layers.Dense(2, activation='softmax')
-    ])
-
-model = create_model()
-
-train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-test_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
-
-train_dataset = train_dataset.shuffle(60000).batch(128)
-test_dataset = test_dataset.batch(128)
-
-loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
-#loss_object = tf.keras.losses.categorical_crossentropy()
-optimizer = optimizers.Adam(lr = 0.001)
-
-train_loss = metrics.Mean('train_loss', dtype=tf.float32)
-train_accuracy = metrics.SparseCategoricalAccuracy('train_accuracy')
-#train_accuracy = metrics.Accuracy('train_accuracy')
-test_loss = metrics.Mean('test_loss', dtype=tf.float32)
-test_accuracy = metrics.SparseCategoricalAccuracy('test_accuracy')
-#test_accuracy = metrics.Accuracy('test_accuracy')
-
-def train_step(x_train, y_train):
-    with tf.GradientTape() as tape:
-        predictions = model(x_train, training=True)
-        loss = loss_object(y_train, predictions)
-        loss = tf.reduce_sum(loss)
-        grads = tape.gradient(loss, model.trainable_variables)
-        optimizer.apply_gradients(zip(grads, model.trainable_variables))
-        train_loss(loss)
-        #train_accuracy(y_train, predictions)
-        train_accuracy.update_state(y_train, predictions)
-
-
-def test_step(x_test, y_test):
-    predictions = model(x_test)
-    loss = loss_object(y_test, predictions)
-    loss = tf.reduce_sum(loss)
-    test_loss(loss)
-    #test_accuracy(y_test, predictions)
-    test_accuracy.update_state(y_test, predictions)
-
 # 解决不同数据格式存储成json时报错的问题
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -113,6 +20,106 @@ class NpEncoder(json.JSONEncoder):
             return obj.tolist()
         else:
             return super(NpEncoder, self).default(obj)
+
+# 加载特征向量
+def load_characteristic_vector(file_name):
+    with open(file_name, "r", encoding="utf-8") as file:
+        reader = csv.reader(file)
+        data = [row for row in reader]
+        vector = np.array(data)
+        vector = np.delete(vector, 0, axis=0)
+        vector = np.delete(vector, 0, axis=1)
+        vector = vector.astype(np.float)
+    return vector
+
+# 对预测结果按课程id进行分组去重再合并
+def group_and_merge(list):
+    t = pd.DataFrame(list)
+    data = t[2].groupby([t[0], t[1]]).max()
+    result = pd.DataFrame(data).reset_index().values.tolist()
+    return result
+
+# 加载数据集的标签
+def load_label(file_name):
+    with open(file_name, "r", encoding="utf-8") as file:
+        reader = csv.reader(file)
+        data = [row[11] for row in reader]
+        vector = np.array(data)
+        vector = np.delete(vector, 0, axis=0)
+        vector = vector.astype(np.int)
+        return vector
+
+# 模型定义
+def create_model():
+    return Sequential([
+        #layers.Dense(256, activation='relu'),
+        #layers.Dense(128, activation='relu'),
+        layers.Dense(256, activation='relu'),
+        layers.Dense(128, activation='relu'),
+        layers.Dense(64, activation='relu'),
+        layers.Dropout(0.3),
+        #layers.Dense(16, activation='relu'),
+        layers.Dense(2, activation='softmax')
+    ])
+
+# 模型训练过程
+def train_step(x_train, y_train):
+    with tf.GradientTape() as tape:
+        predictions = model(x_train, training=True)
+        loss = loss_object(y_train, predictions)
+        loss = tf.reduce_sum(loss)
+        grads = tape.gradient(loss, model.trainable_variables)
+        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+        train_loss(loss)
+        train_accuracy.update_state(y_train, predictions)
+
+# 模型测试过程
+def test_step(x_test, y_test):
+    predictions = model(x_test)
+    loss = loss_object(y_test, predictions)
+    loss = tf.reduce_sum(loss)
+    test_loss(loss)
+    test_accuracy.update_state(y_test, predictions)
+
+# 加载数据
+print("开始加载数据")
+train_data = load_characteristic_vector('../zhangyan/New_Processed_train.csv')
+train_text_data = load_characteristic_vector('final_train.csv')
+train_label = load_label('../zhangyan/train.csv')
+test_data = load_characteristic_vector('../zhangyan/New_Processed_test.csv')
+test_text_data = load_characteristic_vector('final_test.csv')
+test_label = load_label('../zhangyan/test.csv')
+pre_data = load_characteristic_vector('../zhangyan/Normalized_pre.csv')
+pre_text_data = load_characteristic_vector('predict_result.csv')
+x_train = tf.convert_to_tensor(train_data, dtype=tf.float32)
+x_text_train = tf.convert_to_tensor(train_text_data, dtype=tf.float32)
+y_train = tf.convert_to_tensor(train_label, dtype=tf.int32)
+x_test = tf.convert_to_tensor(test_data, dtype=tf.float32)
+x_text_test  = tf.convert_to_tensor(test_text_data, dtype=tf.float32)
+y_test = tf.convert_to_tensor(test_label, dtype=tf.int32)
+result_pre = tf.convert_to_tensor(pre_data, dtype=tf.float32)
+text_pre = tf.convert_to_tensor(pre_text_data, dtype=tf.float32)
+x_train = tf.concat([x_train, x_text_train], axis=1)
+x_test = tf.concat([x_test, x_text_test], axis=1)
+result_pre = tf.concat([result_pre, text_pre], axis=1)
+
+print("数据加载成功！")
+
+# 创建模型
+model = create_model()
+
+train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+test_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
+train_dataset = train_dataset.shuffle(60000).batch(128)
+test_dataset = test_dataset.batch(128)
+
+loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
+optimizer = optimizers.Adam(lr=0.001)
+
+train_loss = metrics.Mean('train_loss', dtype=tf.float32)
+train_accuracy = metrics.SparseCategoricalAccuracy('train_accuracy')
+test_loss = metrics.Mean('test_loss', dtype=tf.float32)
+test_accuracy = metrics.SparseCategoricalAccuracy('test_accuracy')
 
 # 创建日志目录，以供模型训练完使用tensorboard进行查看
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -143,7 +150,7 @@ if (TRAIN==1):
             tf.summary.scalar('accuracy', test_accuracy.result(), step=epoch)
 
         template = 'Epoch {}, Loss: {}, Accuracy: {}, Test Loss: {}, Test Accuracy: {}'
-        print(template.format(epoch + 1,train_loss.result(),train_accuracy.result(),test_loss.result(),test_accuracy.result()))
+        print(template.format(epoch + 1, train_loss.result(), train_accuracy.result(), test_loss.result(),test_accuracy.result()))
 
         # 清空容器状态
         train_loss.reset_states()
@@ -153,18 +160,19 @@ if (TRAIN==1):
     print("训练完成，在命令行输入tensorboard --logdir logs/gradient_tape的存储路径")
     # 模型保存
     print("保存模型")
-    model.save('model.h5')
+    filename = current_time + 'model.h5'
+    model.save(filename)
 
 else:
     # 模型加载
     print("开始加载模型")
-    model = tf.keras.models.load_model('model.h5')
+    model = tf.keras.models.load_model('20200925-153905model.h5')
 
 # 计算预测结果
 print("开始计算结果")
 result = model(result_pre)
 drop_result = tf.argmax(result, axis=1)
-file_name = './zhangyan/user_video_act_val_triple_withId_noLabel_1.csv'
+file_name = '../zhangyan/user_video_act_val_triple_withId_noLabel_1.csv'
 with open(file_name, "r", encoding="utf-8") as file:
     reader = csv.reader(file)
     data = [row for row in reader]
@@ -189,10 +197,11 @@ for key, value in temp.items():
     output = {}
     output["label_list"] = value
     output["item_id"] = key
-    filename = 'result.json'
+    filename = current_time + 'normalized_result.json'
     with open(filename,'a') as file_obj:
         #json.dump(output, file_obj)
         #json.dumps(output,cls=NpEncoder)
         file_obj.write(json.dumps(output,cls=NpEncoder))
         file_obj.write('\n')
 print("保存完成！")
+
