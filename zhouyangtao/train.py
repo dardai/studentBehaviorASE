@@ -27,6 +27,7 @@ def load_characteristic_vector(file_name):
         reader = csv.reader(file)
         data = [row for row in reader]
         vector = np.array(data)
+        print(len(vector))
         vector = np.delete(vector, 0, axis=0)
         vector = np.delete(vector, 0, axis=1)
         vector = vector.astype(np.float)
@@ -54,9 +55,9 @@ def create_model():
     return Sequential([
         #layers.Dense(256, activation='relu'),
         #layers.Dense(128, activation='relu'),
-        layers.Dense(256, activation='relu'),
         layers.Dense(128, activation='relu'),
         layers.Dense(64, activation='relu'),
+        layers.Dense(16, activation='relu'),
         layers.Dropout(0.3),
         #layers.Dense(16, activation='relu'),
         layers.Dense(2, activation='softmax')
@@ -83,14 +84,22 @@ def test_step(x_test, y_test):
 
 # 加载数据
 print("开始加载数据")
-train_data = load_characteristic_vector('../zhangyan/New_Processed_train.csv')
+
+# 加载训练数据的离散特征向量、字幕信息向量和标签
+train_data = load_characteristic_vector('../newfeature/New_Processed_train.csv')
 train_text_data = load_characteristic_vector('final_train.csv')
 train_label = load_label('../zhangyan/train.csv')
-test_data = load_characteristic_vector('../zhangyan/New_Processed_test.csv')
+
+# 加载测试数据的离散特征向量、字幕信息向量和标签
+test_data = load_characteristic_vector('../newfeature/New_Processed_test.csv')
 test_text_data = load_characteristic_vector('final_test.csv')
 test_label = load_label('../zhangyan/test.csv')
-pre_data = load_characteristic_vector('../zhangyan/Normalized_pre.csv')
+
+# 加载预测数据的离散特征向量和字幕信息向量
+pre_data = load_characteristic_vector('../newfeature/new_Processed_predict.csv')
 pre_text_data = load_characteristic_vector('predict_result.csv')
+
+# 将训练数据、测试数据和预测数据的离散特征向量和字幕信息向量进行拼接
 x_train = tf.convert_to_tensor(train_data, dtype=tf.float32)
 x_text_train = tf.convert_to_tensor(train_text_data, dtype=tf.float32)
 y_train = tf.convert_to_tensor(train_label, dtype=tf.int32)
@@ -129,9 +138,9 @@ train_summary_writer = tf.summary.create_file_writer(train_log_dir)
 test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
 # 设置训练epoch
-EPOCHS = 10
+EPOCHS = 100
 # 设置是否训练的标志符，“1”表示进行训练，“0”表示不训练直接加载模型
-TRAIN = 0
+TRAIN = 1
 if (TRAIN==1):
     print("开始模型训练")
     for epoch in range(EPOCHS):
@@ -204,4 +213,3 @@ for key, value in temp.items():
         file_obj.write(json.dumps(output,cls=NpEncoder))
         file_obj.write('\n')
 print("保存完成！")
-
